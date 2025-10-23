@@ -1,3 +1,8 @@
+mod path;
+pub(crate) mod option_pricer;
+mod engine;
+mod timer;
+
 use pyo3::prelude::*;
 use rand::prelude::*;
 use rand_distr::StandardNormal;

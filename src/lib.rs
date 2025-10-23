@@ -17,6 +17,7 @@ fn hello_world() -> PyResult<String> {
 #[pymodule]
 fn zzignal(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(hello_world, m)?)?;
-    m.add_function(wrap_pyfunction!(montecarlo_option, m)?)?;
+    m.add_function(wrap_pyfunction!(montecarlo::option_pricer::montecarlo_option, m)?)?;
+
     Ok(())
 }

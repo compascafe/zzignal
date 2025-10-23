@@ -1,8 +1,7 @@
 use pyo3::prelude::*;
-use rand::prelude::*;
-use crate::montecarlo::engine::montecarlo_mean;
+use crate::montecarlo::{engine, timer::Timer};
 
-/// Monte Carlo European call option pricing
+/// Monte Carlo European call option pricing (parallel)
 #[pyfunction]
 pub fn montecarlo_option(
     s0: f64,
@@ -12,19 +11,19 @@ pub fn montecarlo_option(
     t: f64,
     n: usize,
 ) -> PyResult<f64> {
-    let mut rng = rand::thread_rng();
-    let mut payoff_sum = 0.0;
+    println!(
+        "Running {n} Monte Carlo paths with Rayon threads..."
+    );
 
-    // Here you could use rayon later for parallel speedup
-    for _ in 0..n {
-        let z: f64 = rng.sample(rand_distr::StandardNormal);
-        let st = s0 * f64::exp((r - 0.5 * sigma * sigma) * t + sigma * f64::sqrt(t) * z);
-        let payoff = f64::max(st - k, 0.0);
-        payoff_sum += payoff;
-    }
+    let mut timer = Timer::start();
+    let payoff = |st: f64| (st - k).max(0.0);
 
-    let mean_payoff = payoff_sum / (n as f64);
-    let price = f64::exp(-r * t) * mean_payoff;
+    let mean_payoff = engine::montecarlo_mean(n, s0, r, sigma, t, payoff);
+    let price = (-r * t).exp() * mean_payoff;
+    let elapsed = timer.stop();
+
+    println!("Monte Carlo option price: {:.6}", price);
+    println!("Runtime: {:.3} seconds", elapsed);
     Ok(price)
 }
 
