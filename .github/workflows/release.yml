@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish Linux wheels (3.10–3.12) to PyPI
 
 on:
   push:
@@ -6,62 +6,49 @@ on:
       - 'v*.*.*'
 
 jobs:
-  build-and-publish:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-
+  build-manylinux:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
+      # ---- Python 3.10 ----
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install maturin
+      - name: Install maturin (3.10)
         run: pip install maturin
 
-      - name: Build wheels (PyPI compliant)
-        run: maturin build --release
+      - name: Build wheel (3.10, manylinux 2_34)
+        run: maturin build --release --manylinux 2_34 -i python
 
-      - name: Upload built wheels (per OS)
-        uses: actions/upload-artifact@v4
+      # ---- Python 3.11 ----
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
-          name: zzignal-wheels-${{ matrix.os }}
-          path: target/wheels/*
+          python-version: '3.11'
 
-  upload-to-pypi:
-    name: Upload all wheels to PyPI
-    runs-on: ubuntu-latest
-    needs: build-and-publish
-
-    steps:
-      - name: Download Linux wheels
-        uses: actions/download-artifact@v4
-        with:
-          name: zzignal-wheels-ubuntu-latest
-          path: dist/
-
-      - name: Download macOS wheels
-        uses: actions/download-artifact@v4
-        with:
-          name: zzignal-wheels-macos-latest
-          path: dist/
-
-      - name: Download Windows wheels
-        uses: actions/download-artifact@v4
-        with:
-          name: zzignal-wheels-windows-latest
-          path: dist/
-
-      - name: Install maturin
+      - name: Install maturin (3.11)
         run: pip install maturin
 
-      - name: Upload to PyPI
+      - name: Build wheel (3.11, manylinux 2_34)
+        run: maturin build --release --manylinux 2_34 -i python
+
+      # ---- Python 3.12 ----
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install maturin (3.12)
+        run: pip install maturin
+
+      - name: Build wheel (3.12, manylinux 2_34)
+        run: maturin build --release --manylinux 2_34 -i python
+
+      # Upload all built wheels to PyPI
+      - name: Upload wheels to PyPI
         env:
           MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: maturin upload dist/* -u __token__ -p $MATURIN_PYPI_TOKEN
+        run: maturin upload target/wheels/* -u __token__ -p $MATURIN_PYPI_TOKEN
