@@ -26,4 +26,4 @@ jobs:
       - name: Publish to PyPI
         env:
           MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: maturin upload --release -u __token__ -p $MATURIN_PYPI_TOKEN
+        run: maturin upload -u __token__ -p $MATURIN_PYPI_TOKEN
