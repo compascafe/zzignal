@@ -10,3 +10,9 @@ dist/
 build/
 .maturin
 
+target/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
