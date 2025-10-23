@@ -25,8 +25,8 @@ jobs:
       - name: Install maturin
         run: pip install maturin
 
-      - name: Build wheels (manylinux for Linux)
-        run: maturin build --release --manylinux off
+      - name: Build wheels (PyPI compliant)
+        run: maturin build --release
 
       - name: Upload built wheels (per OS)
         uses: actions/upload-artifact@v4
