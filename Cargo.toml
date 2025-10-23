@@ -1,0 +1,13 @@
+[package]
+name = "zzignal"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "zzignal"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+rayon = "1.10"
+rand = "0.8"

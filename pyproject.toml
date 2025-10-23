@@ -1,0 +1,24 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "zzignal"
+version = "0.1.0"
+description = "High-performance quantitative finance library written in Rust with Python bindings."
+authors = [{ name = "David Tello", email = "david.tello.personal@gmail.com" }]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Software Development :: Libraries"
+]
+
+[project.urls]
+Homepage = "https://github.com/compascafe/zzignal"
+Documentation = "https://github.com/compascafe/zzignal#readme"

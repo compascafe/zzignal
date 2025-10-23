@@ -1,0 +1,12 @@
+target/
+__pycache__/
+*.egg-info
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+dist/
+build/
+.maturin
+
