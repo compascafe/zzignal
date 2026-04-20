@@ -3,7 +3,6 @@
 /// Mercado BTC 15-min tiene DOS tokens: UP y DOWN.
 /// Se suscribe al WebSocket de ambos simultáneamente.
 /// El precio de BTC en tiempo real llega por Chainlink via RTDS.
-use std::net::SocketAddr;
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
@@ -25,16 +24,16 @@ use polymarket_client_sdk::gamma;
 use polymarket_client_sdk::gamma::types::request::{EventBySlugRequest, MarketsRequest, PublicProfileRequest};
 use polymarket_client_sdk::types::{Decimal, U256};
 use reqwest::Client as HttpClient;
-use tokio::net::{TcpListener, TcpStream};
+use serde::Serialize;
 use tokio::sync::{broadcast, mpsc as tokio_mpsc};
-use tokio_tungstenite::{accept_async, connect_async, tungstenite::Message};
+use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
 
 use crate::credentials::ClobCredentials;
 
 // ─── Tipos públicos ───────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MarketInfo {
     pub title:          String,
     pub token_id_up:    String,          // índice 0: Up / Yes
@@ -48,19 +47,19 @@ pub struct MarketInfo {
     pub price_to_beat:  Option<f64>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PriceLevel {
     pub price: f64,
     pub size:  f64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct BookSnapshot {
     pub bids: Vec<PriceLevel>,
     pub asks: Vec<PriceLevel>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ConnStatus {
     Initializing,
     Authenticating,
@@ -74,7 +73,7 @@ pub enum ConnStatus {
 }
 
 /// Orden abierta en el CLOB
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct OpenOrder {
     pub id:           String,
     pub outcome:      String,   // "Up" / "Down"
@@ -85,7 +84,7 @@ pub struct OpenOrder {
 }
 
 /// Trade/fill reciente
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RecentFill {
     pub outcome: String,
     pub side:    OrderSide,
@@ -98,7 +97,7 @@ pub struct RecentFill {
 }
 
 /// Vela OHLCV de BTC/USDT (Binance 1m)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Candle {
     pub open_time: i64,  // Unix ms
     pub open:      f64,
@@ -121,16 +120,16 @@ pub enum AppMsg {
     OrderResult(String),
     OpenOrders(Vec<OpenOrder>),
     RecentFills(Vec<RecentFill>),
-    Candles(Vec<Candle>),     // batch inicial / cambio de intervalo
-    CandleUpdate(Candle),     // actualización de la última vela (WS)
+    Candles { interval: String, candles: Vec<Candle> },  // batch inicial / cambio de intervalo
+    CandleUpdate(Candle),                                 // actualización de la última vela (WS)
 }
 
 // ─── Comandos UI → worker ────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub enum OrderSide { Buy, Sell }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub enum Outcome { Up, Down }
 
 #[derive(Debug)]
@@ -204,17 +203,9 @@ pub async fn run(
     creds:        Arc<ClobCredentials>,
     mut cmd_rx:   tokio_mpsc::UnboundedReceiver<CmdMsg>,
     interval_arc: Arc<std::sync::Mutex<CandleInterval>>,
+    broadcast_tx: broadcast::Sender<String>,
 ) {
     let _ = tx.send(AppMsg::Status(ConnStatus::Initializing));
-
-    let (broadcast_tx, _) = broadcast::channel::<String>(100);
-
-    let ws_broadcast = broadcast_tx.clone();
-    tokio::spawn(async move {
-        if let Err(e) = run_websocket_server("0.0.0.0:8080", ws_broadcast).await {
-            error!("WebSocket server error: {}", e);
-        }
-    });
 
     let mut attempts: u32 = 0;
     loop {
@@ -558,13 +549,18 @@ async fn run_candle_stream(
         let iv = interval_arc.lock().map(|g| *g).unwrap_or(current_iv);
         if iv != current_iv {
             current_iv = iv;
-            let _ = tx.send(AppMsg::Candles(vec![])); // limpiar UI
+            // Limpiar buffer de velas al cambiar intervalo
+            let _ = tx.send(AppMsg::Candles {
+                interval: current_iv.binance_str().to_string(),
+                candles:  vec![],
+            });
         }
 
         // 1. Histórico via REST
         if let Some(candles) = fetch_binance_klines(current_iv.binance_str(), current_iv.limit()).await {
-            let _ = tx.send(AppMsg::Candles(candles.clone()));
-            if let Some(json) = AppMsg::Candles(candles).to_json() {
+            let interval = current_iv.binance_str().to_string();
+            let _ = tx.send(AppMsg::Candles { interval: interval.clone(), candles: candles.clone() });
+            if let Some(json) = (AppMsg::Candles { interval, candles }).to_json() {
                 let _ = broadcast_tx.send(json);
             }
         }
@@ -1243,75 +1239,6 @@ fn parse_ws_book(msg: &serde_json::Value) -> Option<BookSnapshot> {
     Some(BookSnapshot { bids, asks })
 }
 
-// ─── WebSocket Server (para clientes Java) ─────────────────────────────────────
-
-async fn run_websocket_server(
-    addr: &str,
-    broadcast_tx: broadcast::Sender<String>,
-) -> Result<()> {
-    let listener = TcpListener::bind(addr).await
-        .map_err(|e| anyhow!("Failed to bind WebSocket server on {}: {}", addr, e))?;
-    info!("WebSocket server listening on ws://{}", addr);
-
-    loop {
-        match listener.accept().await {
-            Ok((stream, addr)) => {
-                let broadcast_tx = broadcast_tx.clone();
-                tokio::spawn(handle_ws_client(stream, addr, broadcast_tx));
-            }
-            Err(e) => {
-                error!("WebSocket accept error: {}", e);
-            }
-        }
-    }
-}
-
-async fn handle_ws_client(
-    stream: TcpStream,
-    addr: SocketAddr,
-    broadcast_tx: broadcast::Sender<String>,
-) {
-    let ws_stream = match accept_async(stream).await {
-        Ok(ws) => ws,
-        Err(e) => {
-            error!("WebSocket handshake failed for {}: {}", addr, e);
-            return;
-        }
-    };
-
-    info!("Java client connected: {}", addr);
-
-    let (mut write, mut read) = ws_stream.split();
-    let mut broadcast_rx = broadcast_tx.subscribe();
-
-    let reader_handle = tokio::spawn(async move {
-        while let Some(msg) = read.next().await {
-            match msg {
-                Ok(m) if m.is_text() => {
-                    if let Ok(text) = m.into_text() {
-                        info!("Received from Java client {}: {}", addr, text);
-                    }
-                }
-                Ok(m) if m.is_close() => break,
-                _ => {}
-            }
-        }
-    });
-
-    let writer_handle = tokio::spawn(async move {
-        while let Ok(msg) = broadcast_rx.recv().await {
-            if write.send(Message::Text(msg.into())).await.is_err() {
-                break;
-            }
-        }
-    });
-
-    let _ = reader_handle.await;
-    let _ = writer_handle.await;
-
-    info!("Java client disconnected: {}", addr);
-}
-
 // ─── Broadcast AppMsg to JSON ─────────────────────────────────────────────────
 
 impl AppMsg {
@@ -1376,12 +1303,13 @@ impl AppMsg {
                 }).collect();
                 Some(format!(r#"{{"type":"recent_fills","fills":[{}]}}"#, fills_json.join(",")))
             }
-            AppMsg::Candles(candles) => {
+            AppMsg::Candles { interval, candles } => {
                 let candles_json: Vec<String> = candles.iter().map(|c| {
                     format!(r#"{{"open_time":{},"open":{},"high":{},"low":{},"close":{},"volume":{}}}"#,
                         c.open_time, c.open, c.high, c.low, c.close, c.volume)
                 }).collect();
-                Some(format!(r#"{{"type":"candles","candles":[{}]}}"#, candles_json.join(",")))
+                Some(format!(r#"{{"type":"candles","interval":"{}","candles":[{}]}}"#,
+                    interval, candles_json.join(",")))
             }
             AppMsg::CandleUpdate(candle) => {
                 Some(format!(
