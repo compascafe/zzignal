@@ -2,7 +2,7 @@
 name        = "polymarket-backend"
 version     = "0.1.0"
 edition     = "2021"
-rust-version = "1.88"   # MSRV impuesto por polymarket-client-sdk
+rust-version = "1.91"   # MSRV
 default-run = "polymarket-backend"
 
 [dependencies]
@@ -10,7 +10,7 @@ tokio = { version = "1", features = ["full"] }
 
 polymarket-client-sdk = { version = "0.4", features = ["clob", "gamma", "rtds"] }
 
-alloy = { version = "=1.6.3", default-features = false, features = [
+alloy = { version = "1.8", default-features = false, features = [
     "signer-local",
     "signers",
 ] }
@@ -34,6 +34,13 @@ reqwest = { version = "0.13", default-features = false, features = ["rustls", "j
 dotenvy = "0.15"
 
 secrecy = { version = "0.10", features = ["serde"] }
+
+# API REST + WebSocket server
+axum       = { version = "0.8", features = ["ws", "macros"] }
+tower-http = { version = "0.6", features = ["cors"] }
+
+# Base de datos PostgreSQL
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "chrono"] }
 
 [[bin]]
 name = "polymarket-backend"
