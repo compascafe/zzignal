@@ -1,4 +1,4 @@
-//! Polymarket BTC 15-min — Backend Service
+//! zzignal — Polymarket trading backend
 //!
 //! Expone:
 //!   REST API  → http://0.0.0.0:8080/api/...
@@ -6,7 +6,7 @@
 //!
 //! Variables de entorno requeridas (.env):
 //!   POLYMARKET_PRIVATE_KEY, CLOB_API_KEY, CLOB_API_SECRET, CLOB_API_PASSPHRASE
-//!   DATABASE_URL=postgres://user:pass@host/db
+//!   DATABASE_URL=postgres://user:pass@host/db  (opcional)
 //!
 //! Uso: cargo run [--release]
 
@@ -92,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let interval_arc2 = Arc::clone(&interval_arc);
         let bcast_tx2     = bcast_tx.clone();
         std::thread::Builder::new()
-            .name("polymarket-worker".into())
+            .name("zzignal-worker".into())
             .spawn(move || {
                 tokio::runtime::Builder::new_multi_thread()
                     .enable_all()
@@ -130,7 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app  = api::router(Arc::clone(&state));
 
     info!("============================================");
-    info!(" Polymarket BTC 15-min Backend");
+    info!(" zzignal — Polymarket trading backend");
     info!(" REST API:  http://{}/api/...", addr);
     info!(" WebSocket: ws://{}/ws", addr);
     info!("============================================");

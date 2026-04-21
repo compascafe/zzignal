@@ -1,9 +1,14 @@
 [package]
-name        = "polymarket-backend"
-version     = "0.1.0"
-edition     = "2021"
-rust-version = "1.91"   # MSRV
-default-run = "polymarket-backend"
+name         = "zzignal"
+version      = "0.1.0"
+edition      = "2021"
+rust-version = "1.91"
+description  = "Async Polymarket trading backend — REST API, WebSocket server, and BTC market worker"
+license      = "MIT"
+repository   = "https://github.com/compascafe/zzignal"
+keywords     = ["polymarket", "trading", "websocket", "axum", "async"]
+categories   = ["network-programming", "web-programming"]
+default-run  = "zzignal"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -43,7 +48,7 @@ tower-http = { version = "0.6", features = ["cors"] }
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "chrono"] }
 
 [[bin]]
-name = "polymarket-backend"
+name = "zzignal"
 path = "src/main.rs"
 
 [[bin]]
